@@ -18,10 +18,39 @@
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
+    <!-- Tailwind Configuration -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
     <style>
         body {
             font-family: 'Inter', sans-serif;
             background-color: #f8fafc;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in-view {
+            animation: fadeIn 0.4s ease-out forwards;
         }
         /* Custom scrollbar for the logs area */
         .custom-scrollbar::-webkit-scrollbar {
@@ -87,7 +116,73 @@
             </svg>
         );
 
+        const WelcomeScreen = ({ onEnter }) => {
+            return (
+                <div className="bg-slate-50 font-sans text-slate-800 antialiased min-h-screen flex flex-col relative overflow-hidden">
+                    {/* Ambient Background Shapes */}
+                    <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-brand-100 rounded-full blur-3xl opacity-60 mix-blend-multiply -z-10 animate-pulse"></div>
+                    <div className="absolute top-[20%] right-[-10%] w-96 h-96 bg-purple-100 rounded-full blur-3xl opacity-60 mix-blend-multiply -z-10 animate-pulse" style={{ animationDelay: '1s' }}></div>
+                    <div className="absolute bottom-[-20%] left-[20%] w-96 h-96 bg-blue-100 rounded-full blur-3xl opacity-60 mix-blend-multiply -z-10 animate-pulse" style={{ animationDelay: '2s' }}></div>
+
+                    {/* Main Content */}
+                    <main className="flex-grow flex items-center justify-center p-4 sm:p-6">
+                        <div className="bg-white/80 backdrop-blur-xl border border-slate-200 shadow-2xl rounded-3xl p-8 sm:p-12 max-w-lg w-full text-center transform transition-all hover:scale-[1.01] duration-500 fade-in-view">
+                            
+                            {/* Logo / Icon */}
+                            <div className="mx-auto w-20 h-20 bg-brand-600 rounded-2xl flex items-center justify-center mb-8 shadow-lg shadow-brand-500/30 rotate-3 hover:rotate-0 transition-transform duration-300">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                </svg>
+                            </div>
+
+                            {/* Titles */}
+                            <div className="mb-2">
+                                <span className="text-xs font-bold tracking-widest uppercase text-brand-600 bg-brand-50 px-3 py-1 rounded-full border border-brand-100">Project RAI</span>
+                            </div>
+                            <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight mb-4">
+                                RAI Focus
+                            </h1>
+                            
+                            {/* Description */}
+                            <p className="text-slate-600 text-base sm:text-lg mb-10 leading-relaxed">
+                                A streamlined tool designed for educators to quickly log and manage phone policy violations. Maintain a distraction-free environment and ensure uninterrupted instruction.
+                            </p>
+
+                            {/* Action Button */}
+                            <button onClick={onEnter} className="inline-flex items-center justify-center w-full sm:w-auto px-8 py-4 text-lg font-bold text-white bg-brand-600 rounded-full hover:bg-brand-700 shadow-lg hover:shadow-brand-500/50 transition-all active:scale-95 group">
+                                Open Tracker
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-2 transform group-hover:translate-x-1 transition-transform" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                                </svg>
+                            </button>
+
+                            {/* Subtext */}
+                            <p className="mt-6 text-xs text-slate-400 font-medium flex items-center justify-center gap-1.5">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                </svg>
+                                Syncs automatically with Google Sheets
+                            </p>
+                        </div>
+                    </main>
+
+                    {/* Footer */}
+                    <footer className="w-full py-6 text-center z-10 relative">
+                        <p className="text-sm text-slate-500 font-medium">
+                            &copy;2016-2026 wedoIT&trade;Solutions
+                        </p>
+                        <p className="text-xs mt-1 text-slate-400 font-medium tracking-wide">
+                            Developed by Sirmon&trade;
+                        </p>
+                    </footer>
+                </div>
+            );
+        };
+
         function App() {
+            // View State
+            const [currentView, setCurrentView] = useState('welcome');
+
             // State for the form
             const [studentName, setStudentName] = useState('');
             const [selectedGrade, setSelectedGrade] = useState('');
@@ -216,8 +311,12 @@
                 });
             };
 
+            if (currentView === 'welcome') {
+                return <WelcomeScreen onEnter={() => setCurrentView('tracker')} />;
+            }
+
             return (
-                <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800">
+                <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 fade-in-view">
                     
                     {/* Header */}
                     <header className="bg-slate-900 text-white shadow-md py-6 px-4">
@@ -445,7 +544,7 @@
                             &copy;2016-2026 wedoIT&trade;Solutions
                         </p>
                         <p className="text-xs mt-1 text-slate-500">
-                            Developed by raymindcreativez&trade;
+                            Developed by Sirmon&trade;
                         </p>
                     </footer>
                 </div>
