@@ -300,92 +300,17 @@
         const QrScannerModal = ({ isOpen, onClose, onScanSuccess }) => {
             const [scanMode, setScanMode] = useState('camera'); // 'camera' | 'upload' | 'manual'
             const [manualCode, setManualCode] = useState('');
-            const [cameraError, setCameraError] = useState('');
+            const [cameraStatus, setCameraStatus] = useState('idle'); // 'idle' | 'starting' | 'running' | 'error'
+            const [errorMessage, setErrorMessage] = useState('');
+            const [errorKind, setErrorKind] = useState(''); // 'permission' | 'insecure' | 'nocamera' | 'other'
             const [cameras, setCameras] = useState([]);
             const [selectedCameraId, setSelectedCameraId] = useState('');
-            const [isScanning, setIsScanning] = useState(false);
             const scannerInstanceRef = useRef(null);
             const fileInputRef = useRef(null);
+            const isMountedRef = useRef(true);
 
-            useEffect(() => {
-                if (!isOpen || scanMode !== 'camera') {
-                    stopCamera();
-                    return;
-                }
-
-                let isMounted = true;
-
-                const initScanner = async () => {
-                    setCameraError('');
-                    try {
-                        if (!window.Html5Qrcode) {
-                            throw new Error("QR Scanning engine not loaded. Please verify your internet connection.");
-                        }
-
-                        // Stop existing scanner if running
-                        await stopCamera();
-
-                        const container = document.getElementById("qr-video-viewport");
-                        if (!container) return;
-
-                        const html5QrCode = new window.Html5Qrcode("qr-video-viewport");
-                        scannerInstanceRef.current = html5QrCode;
-
-                        // Query available cameras
-                        const devices = await window.Html5Qrcode.getCameras();
-                        if (isMounted && devices && devices.length > 0) {
-                            setCameras(devices);
-                            
-                            // Select back/environment camera if available
-                            const backCam = devices.find(d => 
-                                d.label.toLowerCase().includes('back') || 
-                                d.label.toLowerCase().includes('rear') ||
-                                d.label.toLowerCase().includes('environment')
-                            );
-                            const targetCamId = selectedCameraId || (backCam ? backCam.id : devices[0].id);
-                            if (!selectedCameraId) setSelectedCameraId(targetCamId);
-
-                            await html5QrCode.start(
-                                targetCamId,
-                                {
-                                    fps: 12,
-                                    qrbox: { width: 240, height: 240 },
-                                    aspectRatio: 1.0
-                                },
-                                (decodedText) => {
-                                    if (isMounted) {
-                                        // Play visual/haptic cue
-                                        if (navigator.vibrate) navigator.vibrate(80);
-                                        stopCamera().then(() => {
-                                            onScanSuccess(decodedText);
-                                        });
-                                    }
-                                },
-                                (errorMessage) => {
-                                    // continuous scan frame noise - ignore
-                                }
-                            );
-                            if (isMounted) setIsScanning(true);
-                        } else {
-                            throw new Error("No camera found on this device. Please use Photo Upload or Manual ID entry below.");
-                        }
-                    } catch (err) {
-                        console.warn("Camera start failed:", err);
-                        if (isMounted) {
-                            setCameraError(err.message || "Camera access permission was denied or unavailable.");
-                            setScanMode('manual');
-                        }
-                    }
-                };
-
-                const timer = setTimeout(initScanner, 180);
-
-                return () => {
-                    isMounted = false;
-                    clearTimeout(timer);
-                    stopCamera();
-                };
-            }, [isOpen, scanMode, selectedCameraId]);
+            // Context diagnostic
+            const isSecureContext = window.isSecureContext || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
             const stopCamera = async () => {
                 if (scannerInstanceRef.current) {
@@ -395,11 +320,155 @@
                         }
                         scannerInstanceRef.current.clear();
                     } catch (e) {
-                        console.warn("Scanner shutdown error:", e);
+                        console.warn("Scanner shutdown notice:", e);
                     }
                     scannerInstanceRef.current = null;
-                    setIsScanning(false);
                 }
+                if (isMountedRef.current) {
+                    setCameraStatus('idle');
+                }
+            };
+
+            const startCamera = async (overrideCameraId = null) => {
+                setErrorMessage('');
+                setErrorKind('');
+                setCameraStatus('starting');
+
+                // 1. Insecure Context Check (e.g. mobile accessing http://<lan-ip>:port)
+                if (!isSecureContext) {
+                    setCameraStatus('error');
+                    setErrorKind('insecure');
+                    setErrorMessage(
+                        "Browser Security Restriction: Mobile browsers strictly block camera access on unencrypted HTTP. " +
+                        "To use live camera, please host on HTTPS (e.g., GitHub Pages) or access via localhost. " +
+                        "You can immediately use 'Upload Photo' or 'Manual ID' below."
+                    );
+                    return;
+                }
+
+                // 2. Browser MediaDevices API check
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    setCameraStatus('error');
+                    setErrorKind('unsupported');
+                    setErrorMessage("Your browser does not expose the MediaDevices camera API in this window context.");
+                    return;
+                }
+
+                try {
+                    if (!window.Html5Qrcode) {
+                        throw new Error("QR Scanning library failed to load. Please check your internet connection.");
+                    }
+
+                    // Ensure previous instance is stopped
+                    await stopCamera();
+
+                    const container = document.getElementById("qr-video-viewport");
+                    if (!container) return;
+
+                    const html5QrCode = new window.Html5Qrcode("qr-video-viewport");
+                    scannerInstanceRef.current = html5QrCode;
+
+                    // Prefer back camera facingMode for mobile/tablet environments
+                    const camConfig = overrideCameraId || (selectedCameraId ? selectedCameraId : { facingMode: "environment" });
+
+                    const scanConfig = {
+                        fps: 12,
+                        qrbox: (viewfinderWidth, viewfinderHeight) => {
+                            const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+                            const qrEdge = Math.floor(minEdge * 0.72);
+                            return { width: Math.max(qrEdge, 180), height: Math.max(qrEdge, 180) };
+                        },
+                        aspectRatio: 1.0
+                    };
+
+                    await html5QrCode.start(
+                        camConfig,
+                        scanConfig,
+                        (decodedText) => {
+                            if (isMountedRef.current) {
+                                if (navigator.vibrate) {
+                                    try { navigator.vibrate(80); } catch(e){}
+                                }
+                                stopCamera().then(() => {
+                                    onScanSuccess(decodedText);
+                                });
+                            }
+                        },
+                        (error) => {
+                            // Frame parsing scan noise - ignore
+                        }
+                    );
+
+                    if (isMountedRef.current) {
+                        setCameraStatus('running');
+
+                        // Now that permission is established, query available cameras
+                        try {
+                            const devices = await window.Html5Qrcode.getCameras();
+                            if (devices && devices.length > 0) {
+                                setCameras(devices);
+                            }
+                        } catch (e) {
+                            // Enumerate failure is non-fatal if camera is streaming
+                        }
+                    }
+                } catch (err) {
+                    console.warn("Camera start exception:", err);
+                    if (!isMountedRef.current) return;
+
+                    setCameraStatus('error');
+                    const errText = (err && (err.message || err.name || String(err))) || '';
+
+                    if (errText.includes('NotAllowedError') || errText.includes('Permission') || errText.includes('denied') || errText.includes('not allowed')) {
+                        setErrorKind('permission');
+                        setErrorMessage(
+                            "Camera access was blocked or not allowed in this context. " +
+                            "This happens if camera permissions are blocked in your browser, or if the browser requires a direct tap to grant permission."
+                        );
+                    } else if (errText.includes('NotFoundError') || errText.includes('No camera') || errText.includes('DevicesNotFoundError')) {
+                        setErrorKind('nocamera');
+                        setErrorMessage("No physical camera device was found. You can upload a photo of the QR code or enter the ID manually.");
+                    } else if (errText.includes('NotReadableError') || errText.includes('TrackStartError')) {
+                        setErrorKind('inuse');
+                        setErrorMessage("Camera is currently in use by another tab or app. Please close other camera apps and retry.");
+                    } else {
+                        setErrorKind('other');
+                        setErrorMessage(errText || "Unable to start camera. Please tap 'Grant Permission / Start Camera' to retry.");
+                    }
+                }
+            };
+
+            // Lifecycle: Mount / Trigger on Open
+            useEffect(() => {
+                isMountedRef.current = true;
+
+                if (!isOpen) {
+                    stopCamera();
+                    return;
+                }
+
+                if (scanMode === 'camera') {
+                    const timer = setTimeout(() => {
+                        startCamera();
+                    }, 120);
+
+                    return () => {
+                        clearTimeout(timer);
+                    };
+                } else {
+                    stopCamera();
+                }
+
+                return () => {
+                    isMountedRef.current = false;
+                    stopCamera();
+                };
+            }, [isOpen, scanMode]);
+
+            // Camera switch handler
+            const handleCameraSelect = (cameraId) => {
+                setSelectedCameraId(cameraId);
+                startCamera(cameraId);
             };
 
             const handleFileUpload = async (e) => {
@@ -407,14 +476,14 @@
                 if (!file) return;
 
                 try {
-                    setCameraError('');
+                    setErrorMessage('');
                     const html5QrCode = new window.Html5Qrcode("dummy-upload-target");
                     const decodedText = await html5QrCode.scanFile(file, true);
                     html5QrCode.clear();
                     onScanSuccess(decodedText);
                 } catch (err) {
                     console.error("File scan failed:", err);
-                    setCameraError("Could not detect a valid QR code in this image. Try a clearer photo or enter ID manually.");
+                    setErrorMessage("Could not detect a valid QR code in this image. Try a clearer photo or enter ID manually.");
                 }
             };
 
@@ -478,21 +547,16 @@
 
                         {/* Modal Body */}
                         <div className="p-6">
-                            {cameraError && (
-                                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium">
-                                    {cameraError}
-                                </div>
-                            )}
-
                             {scanMode === 'camera' && (
-                                <div>
-                                    {/* Camera Selector (if multi-camera) */}
-                                    {cameras.length > 1 && (
-                                        <div className="mb-3">
+                                <div className="space-y-3">
+                                    {/* Multi-camera selector */}
+                                    {cameras.length > 1 && cameraStatus === 'running' && (
+                                        <div className="flex items-center gap-2">
+                                            <label className="text-[11px] font-bold text-slate-500 uppercase">Camera:</label>
                                             <select
                                                 value={selectedCameraId}
-                                                onChange={(e) => setSelectedCameraId(e.target.value)}
-                                                className="w-full text-xs bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-700 font-medium"
+                                                onChange={(e) => handleCameraSelect(e.target.value)}
+                                                className="flex-1 text-xs bg-slate-50 border border-slate-300 rounded-lg p-1.5 text-slate-700 font-medium outline-none"
                                             >
                                                 {cameras.map(cam => (
                                                     <option key={cam.id} value={cam.id}>
@@ -504,20 +568,72 @@
                                     )}
 
                                     {/* Camera Viewport Container */}
-                                    <div className="relative mx-auto rounded-2xl overflow-hidden bg-black border-2 border-slate-700 aspect-square max-w-[280px] shadow-inner flex items-center justify-center">
+                                    <div className="relative mx-auto rounded-2xl overflow-hidden bg-slate-950 border-2 border-slate-800 aspect-square max-w-[280px] shadow-inner flex items-center justify-center">
                                         <div id="qr-video-viewport" className="w-full h-full"></div>
-                                        <div className="scan-laser pointer-events-none"></div>
-                                        {!isScanning && (
-                                            <div className="absolute inset-0 flex flex-col items-center justify-center text-white text-xs bg-slate-900/80 p-4 text-center">
-                                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mb-2"></div>
-                                                Initializing Camera...
+
+                                        {/* Scanning Laser when active */}
+                                        {cameraStatus === 'running' && (
+                                            <div className="scan-laser pointer-events-none"></div>
+                                        )}
+
+                                        {/* Initializing Spinner */}
+                                        {cameraStatus === 'starting' && (
+                                            <div className="absolute inset-0 flex flex-col items-center justify-center text-white text-xs bg-slate-900/90 p-4 text-center z-10">
+                                                <div className="animate-spin rounded-full h-8 w-8 border-2 border-brand-500 border-t-transparent mb-3"></div>
+                                                <span className="font-semibold text-sm">Accessing Camera...</span>
+                                                <span className="text-[11px] text-slate-400 mt-1">Please accept browser permission if prompted</span>
+                                            </div>
+                                        )}
+
+                                        {/* Error State with DIRECT USER GESTURE ACTION */}
+                                        {cameraStatus === 'error' && (
+                                            <div className="absolute inset-0 flex flex-col items-center justify-center text-white text-xs bg-slate-900/95 p-4 text-center z-10 overflow-y-auto custom-scrollbar">
+                                                <div className="p-2.5 bg-red-500/20 text-red-400 rounded-full mb-2">
+                                                    <AlertIcon />
+                                                </div>
+                                                <span className="font-bold text-sm text-red-200 mb-1">
+                                                    {errorKind === 'insecure' ? 'HTTPS Required' : 'Camera Access Needed'}
+                                                </span>
+                                                <p className="text-[11px] text-slate-300 leading-snug mb-3">
+                                                    {errorMessage}
+                                                </p>
+
+                                                {errorKind === 'permission' && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => startCamera()}
+                                                        className="w-full py-2.5 px-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                                                    >
+                                                        <CameraIcon className="h-4 w-4" />
+                                                        Grant Camera Permission / Retry
+                                                    </button>
+                                                )}
+
+                                                <div className="flex gap-2 w-full mt-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setScanMode('upload')}
+                                                        className="flex-1 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold rounded-lg text-[11px] transition-colors"
+                                                    >
+                                                        Upload Photo
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setScanMode('manual')}
+                                                        className="flex-1 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold rounded-lg text-[11px] transition-colors"
+                                                    >
+                                                        Manual ID
+                                                    </button>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
-                                    
-                                    <p className="text-center text-xs text-slate-500 mt-4">
-                                        Align the student's unique QR badge within the square frame.
-                                    </p>
+
+                                    {cameraStatus === 'running' && (
+                                        <p className="text-center text-xs text-slate-500">
+                                            Align student's QR code within the square frame.
+                                        </p>
+                                    )}
                                 </div>
                             )}
 
@@ -541,6 +657,9 @@
                                         <p className="text-sm font-bold text-slate-700 mb-1">Upload QR Code Photo</p>
                                         <p className="text-xs text-slate-400">Click to select an image from gallery or file storage</p>
                                     </div>
+                                    {errorMessage && (
+                                        <p className="text-xs text-red-600 mt-3">{errorMessage}</p>
+                                    )}
                                 </div>
                             )}
 
