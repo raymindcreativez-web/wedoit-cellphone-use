@@ -1,0 +1,33 @@
+{
+  "name": "Bantai - Project RAI",
+  "short_name": "Bantai",
+  "description": "Offline-First Classroom Cellphone Policy Violation Tracker with QR Scanning and Google Sheets Sync",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='192' height='192' viewBox='0 0 192 192'><rect width='192' height='192' rx='42' fill='%230f172a'/><rect x='16' y='16' width='160' height='160' rx='32' fill='%232563eb'/><path d='M96 116v14m-36 22h72a12 12 0 0012-12V98a12 12 0 00-12-12H60a12 12 0 00-12 12v42a12 12 0 0012 12zm60-66V62a24 24 0 00-48 0v24h48z' stroke='%23ffffff' stroke-width='10' stroke-linecap='round' stroke-linejoin='round' fill='none'/></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='512' height='512' viewBox='0 0 192 192'><rect width='192' height='192' rx='42' fill='%230f172a'/><rect x='16' y='16' width='160' height='160' rx='32' fill='%232563eb'/><path d='M96 116v14m-36 22h72a12 12 0 0012-12V98a12 12 0 00-12-12H60a12 12 0 00-12 12v42a12 12 0 0012 12zm60-66V62a24 24 0 00-48 0v24h48z' stroke='%23ffffff' stroke-width='10' stroke-linecap='round' stroke-linejoin='round' fill='none'/></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Scan Student QR",
+      "short_name": "Quick Scan",
+      "description": "Launch straight into the student QR scanner",
+      "url": "./index.html?action=scan"
+    }
+  ]
+}
